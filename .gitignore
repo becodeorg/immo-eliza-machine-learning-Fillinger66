@@ -1,0 +1,4 @@
+data/data.db
+data/Koala.csv
+*/__pycache__
+lib/*/__pycache__
