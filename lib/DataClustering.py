@@ -241,7 +241,8 @@ class DataClustering:
             X_test_enriched : pd.DataFrame
                 The test dataset enriched with 'avg_price_per_sqm' and 'cluster_label'.
         """
-
+        print(f"\nDataClustering::AVG_PRICE_PER_SQM -> X_Train : {X_train.shape}")
+        print(f"\nDataClustering::AVG_PRICE_PER_SQM -> X_Test : {X_test.shape}")
         # Copy relevant columns from training data to avoid modifying original data
         df_price_sqm_calc = X_train[['postCode', 'price', 'habitableSurface']].copy()
 
@@ -274,10 +275,10 @@ class DataClustering:
         X_scaled_clustering = scaler_clustering.fit_transform(X_clustering)
 
         # Apply K-Means clustering with k clusters (value passed as parameter)
-        print(f"\nApplication de K-Means sur les codes postaux avec {k} clusters...")
+        print(f"\nDataClustering::AVG_PRICE_PER_SQM -> Application de K-Means sur les codes postaux avec {k} clusters...")
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         price_sqm_by_postcode['cluster_label'] = kmeans.fit_predict(X_scaled_clustering)
-        print("Clustering des codes postaux terminé.")
+        print("DataClustering::AVG_PRICE_PER_SQM -> Clustering des codes postaux terminé.")
 
         # --- 4. Merge clustering results back into original datasets ---
 
@@ -295,10 +296,10 @@ class DataClustering:
 
         # Optional debug prints
         if debug:
-            print("\nEnsembles d'entraînement et de test enrichis avec les informations du code postal/cluster (basé entraînement).")
-            print("X_train_enriched head:")
+            print(f"DataClustering::AVG_PRICE_PER_SQM -> X_train_enriched head: {X_train_enriched.shape}")
             print(X_train_enriched[['postCode', 'avg_price_per_sqm', 'cluster_label']].head(50))
-            print("\nX_test_enriched head:")
+            
+            print(f"\nDataClustering::AVG_PRICE_PER_SQM ->X_test_enriched head: {X_test_enriched.shape}")
             print(X_test_enriched[['postCode', 'avg_price_per_sqm', 'cluster_label']].head(50))
 
         # Return enriched datasets
