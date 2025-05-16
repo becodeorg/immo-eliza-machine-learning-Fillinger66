@@ -273,7 +273,7 @@ class DataPipeline:
         # --- Step 2: Drop rows with missing target values ('price') ---
         # Calls a helper method to remove rows where the target column has NaN.
         self.dropna_target(self.target_columns_name)
-
+        
         # --- Step 3: Manage other missing values ---
         # Calls a helper method to handle missing values in other columns.
         # The implementation of this method is not shown here, but it should
@@ -391,6 +391,8 @@ class DataPipeline:
 
         return full_pipeline
     
+    
+    
     def prepare_data_for_prediction(self):
 
         pipeline = self.load_pipeline()
@@ -398,7 +400,7 @@ class DataPipeline:
         #self.df = self.manage_missing_values(self.df)
         #self.df = self.transform_label_data(self.df)
         #self.transform_boolean_to_int()
-
+        print(self.df.columns.to_list)
         X_test_processed = pipeline.transform(self.df)
 
         return X_test_processed
@@ -463,6 +465,8 @@ class DataPipeline:
         # Separates the DataFrame into the feature set (all columns except target) and the target variable.
         X = self.df.drop(columns=[self.target_columns_name])
         y = self.df[self.target_columns_name]
+
+
 
         # --- Step 12: Split data into training and testing sets ---
         # Splits the feature and target data into subsets for training and evaluating the model.
@@ -566,3 +570,6 @@ class DataPipeline:
 
         cluster = DataClustering()
         cluster.determine_kmean_elbow_method(self.df)
+
+
+    

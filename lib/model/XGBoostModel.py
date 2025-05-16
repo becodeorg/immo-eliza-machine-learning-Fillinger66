@@ -1,10 +1,19 @@
 from lib.DataMetrics import DataMetrics
 import numpy as np
+import pandas as pd
 import os
 import pickle
 from sklearn.model_selection import train_test_split,RandomizedSearchCV
 import scipy.stats as st
 import xgboost as xgb
+
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, OrdinalEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.compose import ColumnTransformer
+
+import matplotlib.pyplot as plt
 
 class ModelNotInitialized(Exception):
     pass
@@ -197,7 +206,7 @@ class XGBoostModel:
 
     def train(self,train_features, train_labels, test_features, test_labels,
                 n_esitmator = 20000,
-                learning_rate = np.float64(0.0195),
+                learning_rate = np.float64(0.0095),
                 random_state = 42,
                 max_depth = 5 ,
                 subsample = np.float64(0.7970),
@@ -399,4 +408,108 @@ class XGBoostModel:
             print(f"Meilleur score de validation croisée (RMSE): {-random_search_xgb.best_score_:.2f}")  # Negated for readability
 
         # --- 7. Return Best Params, Score, and Model ---
-        return random_search_xgb.best_params_, random_search_xgb.best_score_, best_xgb_model    
+        return random_search_xgb.best_params_, random_search_xgb.best_score_, best_xgb_model  
+
+
+
+    def dertermine_features_importance(self,df):
+        
+        df = df.dropna(subset=["price"])
+        df = df.drop(columns=["Unnamed: 0","id","url",'monthlyCost', 'hasBalcony', 'accessibleDisabledPeople'])
+
+        df = df[(df['price'] <= 1000000) & (df['price'] > 50000)]
+        
+
+        X = df.drop(columns=["price"])
+        y = df["price"]
+
+         # --- Robustly Handle Issues in the Target Variable (y) ---
+        print(f"Number of NaN values in y before handling: {pd.isna(y).sum()}")
+
+
+        if "price" in df.columns:
+            numeric_cols = df.select_dtypes(include=["float64", "int64"]).drop(columns=["price"]).columns.tolist()
+        else:
+            numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns.tolist()
+        # Includes object (string) and boolean types in categorical columns.
+        # Note: If previous steps converted some original categoricals to numerical (like 0/1),
+        # they will end up in numeric_cols.
+        categorical_cols = df.select_dtypes(include=["object", "bool"]).columns.tolist()
+
+        print(f"\nIdentified {len(numeric_cols)} numerical columns and {len(categorical_cols)} categorical columns.")
+
+        # --- Step 9: Prepare scikit-learn transformers ---
+        # Defines preprocessing steps for different column types using Pipelines.
+
+        # Numerical Transformer: Impute missing numerical values with the mean, then scale features to have zero mean and unit variance.
+        numeric_transformer = Pipeline(steps=[
+            ("imputer", SimpleImputer(strategy="mean")),
+            ("scaler", StandardScaler())
+        ])
+
+        # Categorical Transformer: Impute missing categorical values with the most frequent value, then apply Ordinal Encoding.
+        # OrdinalEncoder converts categories to integers. handle_unknown="use_encoded_value" and unknown_value=-1
+        # handle categories seen during testing but not training.
+        # Note: OneHotEncoder and TopKOneHotEncoder are commented out, meaning OrdinalEncoder is currently active.
+        categorical_transformer = Pipeline(steps=[
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1))
+        ])
+
+        print("Numerical and Categorical transformers defined.")
+
+        # --- Step 10: Prepare the ColumnTransformer ---
+        # Combines the numerical and categorical transformers and specifies which columns each applies to.
+        # Columns not listed in 'transformers' are dropped by default if remainder is not specified or is 'drop'.
+        # In this configuration, columns NOT in numeric_cols or categorical_cols will be DROPPED.
+        # If you intended to keep other columns (like boolean features already encoded), remainder='passthrough' is needed.
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ("num", numeric_transformer, numeric_cols),
+                ("cat", categorical_transformer, categorical_cols),
+                # ('bool', 'passthrough', boolean_features) # This line is commented out
+            ],
+            # remainder='passthrough' # This line is commented out. Columns not in num_cols or cat_cols will be dropped.
+        )
+
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Fit the full pipeline (preprocessor + XGBoost)
+        model = xgb.XGBRegressor(objective='reg:squarederror', random_state=42)#(objective='binary:logistic', use_label_encoder=False, eval_metric='logloss', random_state=42)
+        full_pipeline_with_xgb = Pipeline(steps=[('preprocessor', preprocessor),
+                                            ('classifier', model)])
+        full_pipeline_with_xgb.fit(X_train, y_train)
+
+        # --- Step 12: Extract Feature Importances and Names ---
+        xgb_model = full_pipeline_with_xgb.named_steps['classifier']
+        importances = xgb_model.feature_importances_
+
+        # Get feature names after preprocessing
+        feature_names = []
+        for name, transformer, features in full_pipeline_with_xgb.named_steps['preprocessor'].transformers_:
+            if name == 'num':
+                feature_names.extend(features)
+            elif name == 'cat':
+                # OrdinalEncoder doesn't change the number of columns, so we use the original categorical column names
+                feature_names.extend(features)
+            # If you had 'remainder=passthrough', you'd need to handle those columns here as well
+
+        # Create a DataFrame of Feature Importances
+        feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+        feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False)
+
+        print("\nFeature Importance Scores (after pipeline transformations):")
+        print(feature_importance_df)
+
+        # --- Step 13: Plot Feature Importances ---
+        plt.figure(figsize=(10, 6))
+        plt.bar(feature_importance_df['Feature'], feature_importance_df['Importance'])
+        plt.xlabel('Feature')
+        plt.ylabel('Importance Score')
+        plt.title('XGBoost Feature Importance (via Pipeline)')
+        plt.xticks(rotation=45, ha='right', fontsize=8)
+        plt.tight_layout()
+        plt.show()  
+
+  
